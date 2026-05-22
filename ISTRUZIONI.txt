@@ -1,0 +1,48 @@
+═══════════════════════════════════════════════════
+  RADIOZONE — Istruzioni per il routing audio reale
+═══════════════════════════════════════════════════
+
+PROBLEMA: Chrome non mostra le schede audio se apri
+il file con doppio clic (protocollo file://).
+Serve un piccolo server locale su localhost.
+
+───────────────────────────────────────────────────
+  WINDOWS
+───────────────────────────────────────────────────
+1. Fai doppio clic su: avvia-radiozone.bat
+2. Si aprirà Chrome su http://localhost:8765
+3. Concedi il permesso MICROFONO quando richiesto
+4. Clicca "↺ Aggiorna" nella sidebar
+   → Le tue schede audio appariranno!
+
+  Se Chrome non si apre automaticamente:
+  Apri Chrome e vai su: http://localhost:8765/radio-zone-splitter.html
+
+───────────────────────────────────────────────────
+  MAC / LINUX
+───────────────────────────────────────────────────
+1. Apri Terminale nella cartella dei file
+2. Esegui: bash avvia-radiozone.sh
+   (oppure: chmod +x avvia-radiozone.sh && ./avvia-radiozone.sh)
+3. Concedi il permesso MICROFONO quando richiesto
+4. Clicca "↺ Aggiorna" nella sidebar
+
+───────────────────────────────────────────────────
+  ALTERNATIVA (senza script)
+───────────────────────────────────────────────────
+Apri un terminale nella cartella e digita:
+  python -m http.server 8765
+Poi apri Chrome su:
+  http://localhost:8765/radio-zone-splitter.html
+
+───────────────────────────────────────────────────
+  REQUISITI
+───────────────────────────────────────────────────
+• Browser: Google Chrome o Microsoft Edge (desktop)
+  Firefox NON supporta il routing multi-uscita.
+• Python: preinstallato su Mac/Linux.
+  Windows: scarica da https://python.org
+• Permesso microfono: necessario per sbloccare
+  i nomi delle schede audio nel browser.
+
+═══════════════════════════════════════════════════

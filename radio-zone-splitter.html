@@ -1,0 +1,1765 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RadioZone — Ad Break Manager</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap');
+
+:root {
+  --bg: #080c10;
+  --surface: #0d1117;
+  --panel: #111820;
+  --border: #1e2d3d;
+  --accent: #00d4ff;
+  --accent2: #ff6b35;
+  --green: #00ff88;
+  --red: #ff3355;
+  --yellow: #ffd700;
+  --text: #c9d8e8;
+  --dim: #4a6078;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Rajdhani', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+body::before {
+  content:'';
+  position:fixed; top:0; left:0; right:0; bottom:0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,212,255,0.012) 2px, rgba(0,212,255,0.012) 4px);
+  pointer-events:none; z-index:9999;
+}
+
+/* ── HEADER ── */
+header {
+  background: linear-gradient(90deg, #050a0f, #0a1622 50%, #050a0f);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  position: sticky; top:0; z-index:200;
+}
+.logo { font-family:'Orbitron',monospace; font-weight:900; font-size:22px; color:var(--accent); text-shadow:0 0 20px rgba(0,212,255,0.6); letter-spacing:4px; }
+.logo span { color:var(--accent2); }
+.master-clock { font-family:'Orbitron',monospace; font-size:28px; color:var(--green); text-shadow:0 0 15px rgba(0,255,136,0.5); letter-spacing:3px; }
+.header-controls { display:flex; gap:10px; align-items:center; }
+
+/* ── STATUS BAR ── */
+.status-bar {
+  background: #050810;
+  border-bottom: 1px solid var(--border);
+  padding: 6px 24px;
+  display: flex; gap:20px; align-items:center;
+  font-size:12px; letter-spacing:1px; color:var(--dim);
+  flex-wrap:wrap;
+}
+.status-pill { display:flex; align-items:center; gap:6px; }
+.dot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:pulse 2s infinite; }
+.dot.red { background:var(--red); box-shadow:0 0 8px var(--red); }
+.dot.yellow { background:var(--yellow); box-shadow:0 0 8px var(--yellow); animation:none; }
+.dot.off { background:var(--dim); box-shadow:none; animation:none; }
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ── LAYOUT ── */
+.main {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  height: calc(100vh - 96px);
+}
+
+/* ── SIDEBAR ── */
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction:column; overflow:hidden;
+}
+.sidebar-section {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px 6px;
+  font-family:'Orbitron',monospace; font-size:9px; letter-spacing:3px; color:var(--dim); text-transform:uppercase;
+}
+.break-list { flex:1; overflow-y:auto; padding:10px; }
+.break-item {
+  background:var(--panel); border:1px solid var(--border); border-radius:6px;
+  padding:10px 12px; margin-bottom:7px; cursor:pointer; transition:all .2s;
+  position:relative; overflow:hidden;
+}
+.break-item::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--dim); transition:all .2s; }
+.break-item:hover { border-color:var(--accent); }
+.break-item:hover::before { background:var(--accent); box-shadow:0 0 8px var(--accent); }
+.break-item.active { border-color:var(--accent); background:#0d1e2d; }
+.break-item.active::before { background:var(--accent); box-shadow:0 0 12px var(--accent); }
+.break-item.on-air::before { background:var(--red); box-shadow:0 0 12px var(--red); animation:pulse 1s infinite; }
+.break-time { font-family:'Orbitron',monospace; font-size:12px; color:var(--accent); margin-bottom:3px; }
+.break-name { font-size:13px; font-weight:600; color:var(--text); margin-bottom:2px; }
+.break-duration { font-size:11px; color:var(--dim); }
+.break-badge { position:absolute; right:8px; top:8px; background:rgba(0,212,255,.1); border:1px solid var(--accent); border-radius:3px; padding:1px 5px; font-size:9px; color:var(--accent); letter-spacing:1px; }
+.break-badge.live { background:rgba(255,51,85,.15); border-color:var(--red); color:var(--red); animation:pulse 1s infinite; }
+.add-break-btn { margin:10px; padding:9px; background:transparent; border:1px dashed var(--border); border-radius:6px; color:var(--dim); font-family:'Rajdhani',sans-serif; font-size:12px; letter-spacing:1px; cursor:pointer; transition:all .2s; width:calc(100% - 20px); }
+.add-break-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+/* ── DEVICES PANEL (sidebar bottom) ── */
+.devices-panel { border-top:1px solid var(--border); padding:10px; max-height:220px; overflow-y:auto; }
+.dev-item {
+  display:flex; align-items:center; gap:8px;
+  padding:6px 8px; border-radius:5px; border:1px solid var(--border);
+  margin-bottom:5px; cursor:default; transition:border-color .2s;
+  background:var(--panel);
+}
+.dev-item.in-use { border-color:rgba(0,212,255,.4); }
+.dev-icon { width:26px; height:26px; border-radius:4px; background:rgba(0,212,255,.08); display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+.dev-info { flex:1; min-width:0; }
+.dev-name { font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text); }
+.dev-id { font-size:9px; color:var(--dim); font-family:monospace; }
+.dev-zones { font-size:9px; color:var(--accent); }
+.no-dev-msg { font-size:11px; color:var(--dim); padding:6px 2px; line-height:1.5; }
+.btn-scan { margin:6px 0 2px; padding:6px 10px; width:100%; background:transparent; border:1px dashed var(--border); border-radius:5px; color:var(--dim); font-family:'Rajdhani',sans-serif; font-size:11px; letter-spacing:1px; cursor:pointer; transition:all .2s; }
+.btn-scan:hover { border-color:var(--accent); color:var(--accent); }
+
+/* ── CONTENT ── */
+.content { display:flex; flex-direction:column; overflow:hidden; }
+.break-editor-header {
+  background:var(--surface); border-bottom:1px solid var(--border);
+  padding:12px 20px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+}
+.break-title-input { font-family:'Orbitron',monospace; font-size:15px; background:transparent; border:none; color:var(--text); outline:none; letter-spacing:2px; min-width:0; }
+.action-buttons { display:flex; gap:8px; flex-wrap:wrap; }
+
+/* ── BUTTONS ── */
+.btn { padding:7px 16px; border-radius:4px; border:none; font-family:'Rajdhani',sans-serif; font-size:12px; font-weight:700; letter-spacing:2px; cursor:pointer; transition:all .2s; text-transform:uppercase; }
+.btn-outline { background:transparent; border:1px solid var(--border); color:var(--dim); }
+.btn-outline:hover { border-color:var(--accent); color:var(--accent); }
+.btn-accent { background:rgba(0,212,255,.1); border:1px solid var(--accent); color:var(--accent); }
+.btn-accent:hover { background:rgba(0,212,255,.2); }
+.btn-danger { background:rgba(255,51,85,.1); border:1px solid var(--red); color:var(--red); }
+.btn-danger:hover { background:rgba(255,51,85,.25); }
+.btn-danger.active-live { background:var(--red); color:#fff; box-shadow:0 0 20px rgba(255,51,85,.6); animation:pulse-live 1s infinite; }
+.btn-green { background:rgba(0,255,136,.1); border:1px solid var(--green); color:var(--green); }
+.btn-green:hover { background:rgba(0,255,136,.2); }
+@keyframes pulse-live { 0%,100%{box-shadow:0 0 15px rgba(255,51,85,.6)} 50%{box-shadow:0 0 35px rgba(255,51,85,.9)} }
+.btn-settings { background:rgba(0,212,255,.08); border:1px solid var(--accent); color:var(--accent); }
+.btn-settings:hover { background:rgba(0,212,255,.18); }
+
+/* ── SETTINGS OVERLAY ── */
+.settings-overlay {
+  display:none; position:fixed; inset:0; background:var(--bg); z-index:500;
+  flex-direction:column; overflow:hidden;
+}
+.settings-overlay.open { display:flex; }
+.settings-header {
+  background: linear-gradient(90deg,#050a0f,#0a1622 50%,#050a0f);
+  border-bottom:1px solid var(--border);
+  height:60px; padding:0 24px;
+  display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
+}
+.settings-title { font-family:'Orbitron',monospace; font-size:16px; letter-spacing:4px; color:var(--accent); }
+.settings-tabs {
+  display:flex; gap:0; border-bottom:1px solid var(--border); flex-shrink:0;
+  background:var(--surface); padding:0 24px;
+}
+.stab {
+  padding:12px 22px; font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:700;
+  letter-spacing:2px; color:var(--dim); cursor:pointer; border-bottom:2px solid transparent;
+  transition:all .2s; text-transform:uppercase; margin-bottom:-1px;
+}
+.stab:hover { color:var(--text); }
+.stab.active { color:var(--accent); border-bottom-color:var(--accent); }
+.settings-body { flex:1; overflow:hidden; display:flex; }
+.settings-pane { display:none; flex:1; overflow-y:auto; padding:24px; }
+.settings-pane.active { display:block; }
+
+/* ── BREAKS CONFIG PANE ── */
+.breaks-toolbar {
+  display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:20px;
+  padding:14px 16px; background:var(--surface); border-radius:8px; border:1px solid var(--border);
+}
+.breaks-toolbar-label { font-family:'Orbitron',monospace; font-size:9px; letter-spacing:3px; color:var(--dim); margin-right:4px; }
+.cfg-input {
+  background:var(--panel); border:1px solid var(--border); color:var(--text);
+  font-family:'Rajdhani',sans-serif; font-size:13px; padding:6px 10px; border-radius:4px;
+  outline:none; transition:border-color .2s;
+}
+.cfg-input:focus { border-color:var(--accent); }
+.cfg-input[type=time] { width:100px; }
+.cfg-input[type=number] { width:70px; }
+.cfg-input[type=text] { min-width:180px; }
+
+.breaks-table { width:100%; border-collapse:collapse; }
+.breaks-table th {
+  text-align:left; font-family:'Orbitron',monospace; font-size:9px; letter-spacing:2px;
+  color:var(--dim); padding:8px 12px; border-bottom:1px solid var(--border); text-transform:uppercase;
+}
+.breaks-table td { padding:0; border-bottom:1px solid var(--border); vertical-align:middle; }
+.break-row { display:contents; }
+.break-row:hover td { background:#0d1a25; }
+.break-row.active-row td { background:#0a1e2d; }
+.break-row.active-row td:first-child { box-shadow:inset 3px 0 0 var(--accent); }
+.td-handle { width:28px; text-align:center; color:var(--dim); cursor:grab; font-size:14px; padding:10px 4px; }
+.td-time input, .td-name input, .td-dur input {
+  background:transparent; border:none; color:var(--text);
+  font-family:'Rajdhani',sans-serif; font-size:13px; outline:none; width:100%; padding:10px 12px;
+  border-left:1px solid var(--border);
+}
+.td-time input { font-family:'Orbitron',monospace; color:var(--accent); width:90px; }
+.td-dur input { width:60px; text-align:center; }
+.td-time input:focus, .td-name input:focus, .td-dur input:focus { background:rgba(0,212,255,.04); }
+.td-actions { width:110px; padding:6px 10px; }
+.td-actions { display:flex; gap:5px; align-items:center; border-left:1px solid var(--border); }
+.tbl-btn {
+  padding:4px 9px; border-radius:3px; border:1px solid var(--border); background:transparent;
+  color:var(--dim); font-family:'Rajdhani',sans-serif; font-size:11px; cursor:pointer; transition:all .15s;
+}
+.tbl-btn:hover { border-color:var(--accent); color:var(--accent); }
+.tbl-btn.del:hover { border-color:var(--red); color:var(--red); }
+.tbl-btn.dup:hover { border-color:var(--green); color:var(--green); }
+
+.quick-add-section {
+  margin-top:28px; padding:18px 20px; background:var(--surface); border-radius:8px; border:1px solid var(--border);
+}
+.quick-add-title { font-family:'Orbitron',monospace; font-size:10px; letter-spacing:3px; color:var(--accent); margin-bottom:14px; }
+.quick-row { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:10px; }
+.quick-field { display:flex; flex-direction:column; gap:5px; }
+.quick-field label { font-size:11px; color:var(--dim); letter-spacing:1px; }
+.batch-preview {
+  margin-top:12px; padding:10px 14px; background:var(--panel); border-radius:5px;
+  border:1px solid var(--border); font-size:12px; color:var(--dim); min-height:36px; line-height:1.8;
+}
+.batch-preview span { color:var(--accent); font-family:'Orbitron',monospace; font-size:11px; margin-right:8px; }
+
+.templates-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; margin-top:16px; }
+.template-card {
+  background:var(--panel); border:1px solid var(--border); border-radius:6px;
+  padding:12px 14px; cursor:pointer; transition:all .2s;
+}
+.template-card:hover { border-color:var(--accent); background:#0d1e2d; }
+.template-card-name { font-size:13px; font-weight:700; color:var(--text); margin-bottom:4px; }
+.template-card-desc { font-size:11px; color:var(--dim); line-height:1.4; }
+.template-card-count { font-family:'Orbitron',monospace; font-size:10px; color:var(--accent); margin-top:6px; }
+
+/* sections inside pane */
+.cfg-section { margin-bottom:28px; }
+.cfg-section-title {
+  font-family:'Orbitron',monospace; font-size:9px; letter-spacing:3px; color:var(--dim);
+  text-transform:uppercase; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border);
+}
+.cfg-row { display:flex; gap:12px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+.cfg-row label { font-size:12px; color:var(--dim); min-width:140px; }
+
+/* ── ZONES ── */
+.zones-container { flex:1; overflow-y:auto; padding:16px 20px; }
+.zones-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; }
+
+.zone-card {
+  background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; transition:border-color .3s;
+  position:relative;
+}
+.zone-card.on-air { border-color:var(--red); box-shadow:0 0 22px rgba(255,51,85,.18); }
+.zone-card.has-audio { border-color:rgba(0,212,255,.35); }
+
+.zone-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:9px 12px; background:#09111a; border-bottom:1px solid var(--border);
+  gap:8px;
+}
+.zone-name { font-family:'Orbitron',monospace; font-size:10px; letter-spacing:2px; color:var(--accent); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+.zone-status-badge { font-size:9px; letter-spacing:2px; font-weight:700; padding:2px 6px; border-radius:3px; white-space:nowrap; }
+.zone-status-badge.ready { color:var(--dim); border:1px solid var(--border); }
+.zone-status-badge.live { color:var(--red); border:1px solid var(--red); animation:pulse 1s infinite; }
+.zone-status-badge.loaded { color:var(--green); border:1px solid rgba(0,255,136,.4); }
+
+.zone-body { padding:12px; }
+
+/* device selector row */
+.device-row {
+  display:flex; align-items:center; gap:6px; margin-bottom:10px;
+  padding:6px 8px; background:#080e14; border-radius:5px; border:1px solid var(--border);
+}
+.device-row-icon { font-size:14px; color:var(--accent); flex-shrink:0; }
+.device-select {
+  flex:1; background:transparent; border:none; color:var(--text);
+  font-family:'Rajdhani',sans-serif; font-size:12px; outline:none; cursor:pointer;
+  min-width:0;
+}
+.device-select option { background:#0d1117; color:var(--text); }
+.device-indicator { width:7px; height:7px; border-radius:50%; background:var(--dim); flex-shrink:0; transition:all .3s; }
+.device-indicator.active { background:var(--green); box-shadow:0 0 6px var(--green); }
+
+/* player row */
+.player-row { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+.play-btn { width:34px; height:34px; border-radius:50%; border:2px solid var(--border); background:transparent; color:var(--dim); font-size:13px; cursor:pointer; transition:all .2s; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.play-btn:hover { border-color:var(--green); color:var(--green); }
+.play-btn.playing { border-color:var(--green); color:var(--green); box-shadow:0 0 10px rgba(0,255,136,.35); }
+.track-info { flex:1; min-width:0; }
+.track-name { font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text); }
+.track-meta { font-family:'Orbitron',monospace; font-size:9px; color:var(--dim); margin-top:2px; display:flex; gap:8px; align-items:center; }
+.track-badge { font-size:9px; padding:1px 5px; border-radius:2px; background:rgba(0,255,136,.1); border:1px solid rgba(0,255,136,.3); color:var(--green); }
+
+/* file upload area */
+.file-upload-area {
+  border:1px dashed var(--border); border-radius:5px; padding:8px 10px;
+  display:flex; align-items:center; gap:8px; cursor:pointer; transition:all .2s; margin-bottom:9px;
+}
+.file-upload-area:hover { border-color:var(--accent); }
+.file-upload-area.has-file { border-color:rgba(0,255,136,.4); border-style:solid; }
+.file-upload-label { font-size:11px; color:var(--dim); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.file-upload-area.has-file .file-upload-label { color:var(--green); }
+input[type=file].hidden-file { display:none; }
+
+/* progress */
+.progress-track { height:4px; background:var(--border); border-radius:2px; overflow:hidden; cursor:pointer; margin-bottom:4px; }
+.progress-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--green)); border-radius:2px; width:0%; transition:width .4s linear; }
+.zone-card.on-air .progress-fill { background:linear-gradient(90deg,var(--red),var(--accent2)); }
+.time-row { display:flex; justify-content:space-between; font-family:'Orbitron',monospace; font-size:9px; color:var(--dim); margin-bottom:8px; }
+
+/* VU */
+.vu-meter { display:flex; gap:2px; height:18px; align-items:flex-end; margin-bottom:8px; }
+.vu-bar { flex:1; background:var(--border); border-radius:1px; height:15%; transition:height .08s ease; }
+.vu-bar.a { background:var(--green); }
+.vu-bar.b { background:var(--yellow); }
+.vu-bar.c { background:var(--red); }
+
+/* volume */
+.vol-row { display:flex; align-items:center; gap:8px; }
+.vol-label { font-size:10px; color:var(--dim); letter-spacing:1px; }
+input[type=range].vol-slider { flex:1; height:4px; -webkit-appearance:none; background:var(--border); border-radius:2px; outline:none; cursor:pointer; }
+input[type=range].vol-slider::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:var(--accent); box-shadow:0 0 5px var(--accent); }
+.vol-val { font-family:'Orbitron',monospace; font-size:9px; color:var(--accent); min-width:28px; text-align:right; }
+
+.zone-footer { display:flex; gap:6px; padding:0 12px 12px; }
+.zone-footer .btn { flex:1; padding:5px 8px; font-size:10px; }
+
+/* ── MASTER PANEL ── */
+.master-panel {
+  background:var(--surface); border-top:1px solid var(--border);
+  padding:10px 20px; display:flex; align-items:center; gap:20px; flex-wrap:wrap;
+}
+.master-label { font-family:'Orbitron',monospace; font-size:8px; letter-spacing:3px; color:var(--dim); text-transform:uppercase; margin-bottom:3px; }
+.countdown-display { font-family:'Orbitron',monospace; font-size:32px; color:var(--accent2); text-shadow:0 0 18px rgba(255,107,53,.5); letter-spacing:4px; }
+.countdown-display.urgent { color:var(--red); text-shadow:0 0 18px rgba(255,51,85,.7); animation:pulse-live .5s infinite; }
+input[type=range].master-slider { width:160px; height:4px; -webkit-appearance:none; background:var(--border); border-radius:2px; outline:none; cursor:pointer; }
+input[type=range].master-slider::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:var(--accent2); box-shadow:0 0 5px var(--accent2); }
+
+/* ── ON AIR BANNER ── */
+.onair-banner { display:none; position:fixed; top:64px; left:0; right:0; background:var(--red); color:#fff; text-align:center; font-family:'Orbitron',monospace; font-size:11px; letter-spacing:6px; padding:5px; z-index:190; animation:pulse-live 1s infinite; }
+.onair-banner.visible { display:block; }
+
+/* ── MODALS ── */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:1000; align-items:center; justify-content:center; }
+.modal-overlay.open { display:flex; }
+.modal { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:22px; width:420px; max-width:90vw; }
+.modal h2 { font-family:'Orbitron',monospace; font-size:12px; letter-spacing:3px; color:var(--accent); margin-bottom:18px; }
+.form-group { margin-bottom:12px; }
+.form-label { display:block; font-size:11px; letter-spacing:1px; color:var(--dim); margin-bottom:5px; text-transform:uppercase; }
+.form-input { width:100%; background:var(--panel); border:1px solid var(--border); color:var(--text); font-family:'Rajdhani',sans-serif; font-size:13px; padding:7px 10px; border-radius:4px; outline:none; transition:border-color .2s; }
+.form-input:focus { border-color:var(--accent); }
+.modal-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+
+/* add zone card */
+.add-zone-card { background:transparent; border:1px dashed var(--border); border-radius:8px; min-height:180px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; transition:all .2s; gap:8px; }
+.add-zone-card:hover { border-color:var(--accent); }
+.add-zone-icon { font-size:24px; color:var(--dim); }
+.add-zone-text { font-size:11px; letter-spacing:2px; color:var(--dim); text-transform:uppercase; }
+
+/* scrollbar */
+::-webkit-scrollbar { width:5px; }
+::-webkit-scrollbar-track { background:var(--bg); }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+/* audio api warning */
+.audio-api-note { font-size:10px; color:var(--dim); padding:4px 8px; background:rgba(255,215,0,.05); border:1px solid rgba(255,215,0,.15); border-radius:3px; letter-spacing:.5px; line-height:1.4; }
+</style>
+</head>
+<body>
+
+<div class="onair-banner" id="onairBanner">● ON AIR — BREAK IN CORSO ●</div>
+
+<header>
+  <div class="logo">RADIO<span>ZONE</span></div>
+  <div class="master-clock" id="masterClock">00:00:00</div>
+  <div class="header-controls">
+    <button class="btn btn-outline" onclick="openAddZoneModal()">+ ZONA</button>
+    <button class="btn btn-settings" onclick="openSettings()">⚙ CONFIG</button>
+    <button class="btn btn-danger" id="masterLiveBtn" onclick="toggleMasterLive()">▶ ON AIR</button>
+  </div>
+</header>
+
+<div class="status-bar">
+  <div class="status-pill"><div class="dot"></div><span>SISTEMA ATTIVO</span></div>
+  <div class="status-pill"><div class="dot yellow" id="devDot"></div><span id="devCountLabel">Rilevamento dispositivi…</span></div>
+  <div class="status-pill"><div class="dot red"></div><span id="activeZonesLabel">0 ZONE IN ARIA</span></div>
+  <div class="status-pill"><div class="dot off" id="apiDot"></div><span id="apiLabel">Web Audio API</span></div>
+  <div style="margin-left:auto; font-family:'Orbitron',monospace; font-size:10px;" id="breakStatus">NESSUN BREAK ATTIVO</div>
+</div>
+
+<div class="main">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">Scaletta Break</div>
+    <div class="break-list" id="breakList"></div>
+    <button class="add-break-btn" onclick="openSettings()">⚙ Gestisci Break...</button>
+
+    <div class="sidebar-section" style="margin-top:auto;">Schede Audio</div>
+    <div class="devices-panel" id="devicesPanel">
+      <p class="no-dev-msg">Nessun dispositivo rilevato.</p>
+      <button class="btn-scan" onclick="scanDevices()">↺ Scansiona dispositivi</button>
+    </div>
+  </aside>
+
+  <!-- CONTENT -->
+  <div class="content">
+    <div class="break-editor-header">
+      <input class="break-title-input" id="breakTitleInput" value="BREAK ORE 10:00" onchange="updateActiveBreakTitle(this.value)" />
+      <div class="action-buttons">
+        <button class="btn btn-outline" onclick="resetAllZones()">↺ RESET</button>
+        <button class="btn btn-accent" onclick="syncAllZones()">⏱ SYNC</button>
+        <button class="btn btn-danger" id="liveBreakBtn" onclick="toggleBreakLive()">▶ AVVIA BREAK</button>
+      </div>
+    </div>
+
+    <div class="zones-container">
+      <div class="zones-grid" id="zonesGrid"></div>
+    </div>
+
+    <div class="master-panel">
+      <div>
+        <div class="master-label">Countdown</div>
+        <div class="countdown-display" id="countdownDisplay">--:--</div>
+      </div>
+      <div>
+        <div class="master-label">Volume Master</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+          <input type="range" class="master-slider" id="masterVol" min="0" max="100" value="85" step="1" oninput="updateMasterVol(this.value)">
+          <span class="vol-val" id="masterVolVal">85%</span>
+        </div>
+      </div>
+      <div style="margin-left:auto;">
+        <div class="master-label">Zone Attive</div>
+        <div style="font-family:'Orbitron',monospace;font-size:22px;color:var(--accent);text-shadow:0 0 10px rgba(0,212,255,.5);" id="activeZoneCount">0 / 0</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL: ADD BREAK -->
+<div class="modal-overlay" id="addBreakModal">
+  <div class="modal">
+    <h2>NUOVO BREAK</h2>
+    <div class="form-group"><label class="form-label">Nome Break</label><input class="form-input" id="newBreakName" placeholder="es. Break Ore 12:00" /></div>
+    <div class="form-group"><label class="form-label">Orario</label><input class="form-input" type="time" id="newBreakTime" value="12:00" /></div>
+    <div class="form-group"><label class="form-label">Durata (minuti)</label><input class="form-input" type="number" id="newBreakDuration" value="3" min="1" max="30" /></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('addBreakModal')">Annulla</button>
+      <button class="btn btn-accent" onclick="addBreak()">Crea</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ADD ZONE -->
+<div class="modal-overlay" id="addZoneModal">
+  <div class="modal">
+    <h2>NUOVA ZONA</h2>
+    <div class="form-group"><label class="form-label">Nome Zona</label><input class="form-input" id="newZoneName" placeholder="es. ZONA NORD" /></div>
+    <div class="form-group">
+      <label class="form-label">Scheda Audio Output</label>
+      <select class="form-input" id="newZoneDevice" style="cursor:pointer;"></select>
+    </div>
+    <div class="form-group"><label class="form-label">Nome Spot/Traccia</label><input class="form-input" id="newZoneTrack" placeholder="es. Spot Locale Pizzeria" /></div>
+    <div class="form-group"><label class="form-label">Durata simulata (sec)</label><input class="form-input" type="number" id="newZoneDuration" value="30" min="5" max="600" /></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('addZoneModal')">Annulla</button>
+      <button class="btn btn-accent" onclick="addZoneFromModal()">Aggiungi</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+//  AUDIO ENGINE
+// ════════════════════════════════════════════════════════
+let audioCtx = null;
+let audioDevices = []; // { deviceId, label }
+let masterGain = null;
+
+function getAudioCtx() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.85;
+    masterGain.connect(audioCtx.destination);
+    document.getElementById('apiDot').className = 'dot';
+    document.getElementById('apiLabel').textContent = 'Web Audio — OK';
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+async function scanDevices() {
+  const panel = document.getElementById('devicesPanel');
+  panel.innerHTML = '<p class="no-dev-msg" style="color:var(--accent)">⏳ Scansione in corso…</p>';
+
+  const log = [];
+  const addLog = (msg, color) => log.push(`<span style="color:${color||'var(--dim)'}">${msg}</span>`);
+
+  // ── STEP 1: check API availability ──
+  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+    addLog('✗ mediaDevices API non disponibile (serve HTTPS o localhost)', 'var(--red)');
+    showDebug(panel, log); return;
+  }
+  addLog('✓ mediaDevices API disponibile', 'var(--green)');
+
+  // ── STEP 2: check protocol ──
+  const proto = location.protocol;
+  addLog(`• Protocollo: ${proto} ${proto === 'file:' ? '← potrebbe bloccare i label (usa localhost)' : ''}`,
+    proto === 'file:' ? 'var(--yellow)' : 'var(--dim)');
+
+  // ── STEP 3: enumerate BEFORE permission (may get empty labels) ──
+  let rawList = [];
+  try {
+    rawList = await navigator.mediaDevices.enumerateDevices();
+    addLog(`• Dispositivi totali prima del permesso: ${rawList.length}`, 'var(--dim)');
+    rawList.forEach(d => addLog(`  [${d.kind}] id=${d.deviceId.slice(0,8)}… label="${d.label||'(vuoto)'}"`, 'var(--dim)'));
+  } catch(e) {
+    addLog('✗ enumerateDevices fallito: ' + e.message, 'var(--red)');
+    showDebug(panel, log); return;
+  }
+
+  // ── STEP 4: request microphone permission to unlock labels ──
+  let permGranted = false;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    stream.getTracks().forEach(t => t.stop()); // release mic immediately
+    permGranted = true;
+    addLog('✓ Permesso microfono concesso — label sbloccati', 'var(--green)');
+  } catch(e) {
+    addLog(`⚠ Permesso microfono negato (${e.name}): i label potrebbero essere vuoti`, 'var(--yellow)');
+    addLog('  → Vai in Impostazioni sito e consenti il Microfono, poi riprova', 'var(--yellow)');
+  }
+
+  // ── STEP 5: enumerate again AFTER permission ──
+  try {
+    rawList = await navigator.mediaDevices.enumerateDevices();
+    addLog(`• Dispositivi totali dopo il permesso: ${rawList.length}`, 'var(--dim)');
+  } catch(e) {
+    addLog('✗ enumerateDevices (2° tentativo) fallito: ' + e.message, 'var(--red)');
+    showDebug(panel, log); return;
+  }
+
+  // ── STEP 6: filter outputs ──
+  const outputs = rawList.filter(d => d.kind === 'audiooutput');
+  addLog(`• Uscite audio (audiooutput): ${outputs.length}`, outputs.length > 0 ? 'var(--green)' : 'var(--yellow)');
+  outputs.forEach((d, i) => {
+    const lbl = d.label || `Output ${i+1}`;
+    addLog(`  [${i+1}] ${lbl} | id: ${d.deviceId.slice(0,16)}…`, 'var(--accent)');
+  });
+
+  if (outputs.length === 0) {
+    addLog('', '');
+    addLog('ℹ Possibili cause:', 'var(--yellow)');
+    addLog('  1. Stai usando Firefox — non supporta setSinkId/output enum', 'var(--dim)');
+    addLog('  2. Stai aprendo il file con file:// — usa un server locale', 'var(--dim)');
+    addLog('  3. Permesso microfono non concesso — riprova dopo averlo abilitato', 'var(--dim)');
+    addLog('  4. Sistema con un solo dispositivo audio (audiooutput = default only)', 'var(--dim)');
+  }
+
+  // ── STEP 7: check setSinkId support ──
+  const testEl = new Audio();
+  if (typeof testEl.setSinkId === 'function') {
+    addLog('✓ setSinkId supportato — routing reale disponibile', 'var(--green)');
+  } else {
+    addLog('✗ setSinkId NON supportato da questo browser', 'var(--red)');
+    addLog('  → Usa Google Chrome o Microsoft Edge (desktop)', 'var(--yellow)');
+  }
+
+  // ── STEP 8: build audioDevices array ──
+  audioDevices = outputs.map((d, i) => ({
+    deviceId: d.deviceId,
+    label: d.label || `Output ${i+1}`,
+  }));
+
+  // Also add inputs shown as outputs when no outputs found (some Linux setups)
+  if (audioDevices.length === 0) {
+    const allAudio = rawList.filter(d => d.deviceId && d.deviceId !== '');
+    if (allAudio.length > 0) {
+      addLog(`⚠ Fallback: mostro tutti i ${allAudio.length} dispositivi audio trovati`, 'var(--yellow)');
+      audioDevices = allAudio.map((d, i) => ({
+        deviceId: d.deviceId,
+        label: (d.label || `Device ${i+1}`) + ' [' + d.kind + ']',
+      }));
+    }
+  }
+
+  document.getElementById('devCountLabel').textContent = audioDevices.length + ' SCHEDE AUDIO';
+  document.getElementById('devDot').className = audioDevices.length > 0 ? 'dot' : 'dot yellow';
+
+  renderDevicesPanel(log);
+  populateDeviceSelects();
+
+  // Listen for device changes
+  navigator.mediaDevices.ondevicechange = () => scanDevices();
+}
+
+function showDebug(panel, log) {
+  panel.innerHTML = `<div style="font-family:monospace;font-size:10px;line-height:1.7;padding:4px 2px">${log.join('<br>')}</div>
+    <button class="btn-scan" onclick="scanDevices()">↺ Riprova</button>`;
+}
+
+function renderDevicesPanel(log) {
+  const panel = document.getElementById('devicesPanel');
+  panel.innerHTML = '';
+
+  if (audioDevices.length === 0) {
+    const msg = document.createElement('p');
+    msg.className = 'no-dev-msg';
+    msg.textContent = 'Nessuna uscita audio rilevata. Vedi il log qui sotto.';
+    panel.appendChild(msg);
+  } else {
+    audioDevices.forEach(d => {
+      const usedBy = zones.filter(z => z.deviceId === d.deviceId).map(z => z.name);
+      const div = document.createElement('div');
+      div.className = 'dev-item' + (usedBy.length ? ' in-use' : '');
+      div.id = 'devpanel-' + d.deviceId;
+      div.innerHTML = `
+        <div class="dev-icon">🔊</div>
+        <div class="dev-info">
+          <div class="dev-name" title="${d.label}">${d.label}</div>
+          <div class="dev-id">${d.deviceId === 'default' ? 'default' : d.deviceId.slice(0,14) + '…'}</div>
+          ${usedBy.length ? '<div class="dev-zones">→ ' + usedBy.join(', ') + '</div>' : ''}
+        </div>`;
+      panel.appendChild(div);
+    });
+  }
+
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:6px;margin-top:4px;';
+  const btnR = document.createElement('button');
+  btnR.className = 'btn-scan'; btnR.textContent = '↺ Aggiorna'; btnR.style.flex = '1';
+  btnR.onclick = scanDevices;
+  const btnD = document.createElement('button');
+  btnD.className = 'btn-scan'; btnD.textContent = '🔍 Log'; btnD.style.flex = '0 0 auto';
+  const dbg = document.createElement('div');
+  dbg.style.cssText = 'display:none;margin-top:6px;padding:6px 4px;background:#050810;border-radius:4px;border:1px solid var(--border);font-family:monospace;font-size:9px;line-height:1.8;overflow-x:auto;max-height:200px;overflow-y:auto;word-break:break-all;';
+  dbg.innerHTML = (log || []).join('<br>') || '<span style="color:var(--dim)">Nessun log</span>';
+  btnD.onclick = () => { dbg.style.display = dbg.style.display === 'none' ? 'block' : 'none'; };
+  btnRow.appendChild(btnR); btnRow.appendChild(btnD);
+  panel.appendChild(btnRow);
+  panel.appendChild(dbg);
+}
+
+function populateDeviceSelects() {
+  // Update all zone cards' device selects
+  zones.forEach(z => {
+    const sel = document.getElementById('devsel-' + z.id);
+    if (sel) {
+      const cur = sel.value;
+      sel.innerHTML = buildDeviceOptions(cur || z.deviceId);
+    }
+  });
+  // Update add-zone modal select
+  const ms = document.getElementById('newZoneDevice');
+  if (ms) ms.innerHTML = buildDeviceOptions('');
+}
+
+function buildDeviceOptions(selectedId) {
+  let html = '<option value="">— Default di sistema —</option>';
+  audioDevices.forEach(d => {
+    html += `<option value="${d.deviceId}" ${d.deviceId === selectedId ? 'selected' : ''}>${d.label}</option>`;
+  });
+  return html;
+}
+
+// Attach real audio to a zone using Web Audio API + setSinkId
+function attachAudio(zone) {
+  const ctx = getAudioCtx();
+  if (!zone.audioEl) return;
+  try {
+    zone.audioEl.crossOrigin = 'anonymous';
+    if (!zone.sourceNode) {
+      zone.sourceNode = ctx.createMediaElementSource(zone.audioEl);
+      zone.gainNode = ctx.createGain();
+      zone.gainNode.gain.value = zone.vol / 100;
+      zone.sourceNode.connect(zone.gainNode);
+      zone.gainNode.connect(masterGain);
+    }
+  } catch(e) {}
+
+  // Route to specific device via setSinkId
+  if (zone.deviceId && zone.audioEl.setSinkId) {
+    zone.audioEl.setSinkId(zone.deviceId).catch(() => {});
+  }
+}
+
+function generateTestTone(id) {
+  // Creates a short sine-wave test tone as a WAV blob URL
+  const freqs = [220, 277, 330, 370, 440, 494, 554, 622];
+  const freq = freqs[(id - 1) % freqs.length];
+  const SR = 44100, dur = 5, len = SR * dur;
+  const buf = new Float32Array(len);
+  for (let i = 0; i < len; i++) {
+    const t = i / SR;
+    buf[i] = 0.25 * Math.sin(2 * Math.PI * freq * t) * Math.max(0, 1 - t / dur);
+  }
+  const ab = new ArrayBuffer(44 + len * 2);
+  const v = new DataView(ab);
+  const wr32 = (o, x) => v.setUint32(o, x, true);
+  const wr16 = (o, x) => v.setUint16(o, x, true);
+  [0x52,0x49,0x46,0x46].forEach((b,i) => v.setUint8(i, b));
+  wr32(4, 36 + len * 2);
+  [0x57,0x41,0x56,0x45,0x66,0x6d,0x74,0x20].forEach((b,i) => v.setUint8(8+i, b));
+  wr32(16,16); wr16(20,1); wr16(22,1); wr32(24,SR); wr32(28,SR*2); wr16(32,2); wr16(34,16);
+  [0x64,0x61,0x74,0x61].forEach((b,i) => v.setUint8(36+i, b));
+  wr32(40, len * 2);
+  for (let i = 0; i < len; i++) {
+    const s = Math.max(-1, Math.min(1, buf[i]));
+    v.setInt16(44 + i * 2, s < 0 ? s * 32768 : s * 32767, true);
+  }
+  return URL.createObjectURL(new Blob([ab], { type: 'audio/wav' }));
+}
+
+// ════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════
+let breaks = [
+  { id:1, name:'Break Ore 08:00', time:'08:00', duration:3 },
+  { id:2, name:'Break Ore 10:00', time:'10:00', duration:4 },
+  { id:3, name:'Break Ore 12:00', time:'12:00', duration:5 },
+  { id:4, name:'Break Ore 14:00', time:'14:00', duration:3 },
+  { id:5, name:'Break Ore 16:00', time:'16:00', duration:4 },
+];
+let activeBreakId = 2;
+let breakLive = false;
+let masterLive = false;
+let breakCountdown = 0;
+let countTimer = null;
+let nextZoneId = 1;
+let nextBreakId = 6;
+
+let zones = []; // { id, name, deviceId, track, fileUrl, duration, progress, playing, vol, audioEl, sourceNode, gainNode, vuInterval, progressInterval }
+
+const DEFAULT_ZONES = [
+  { name:'ZONA NORD',     deviceIdx:0, track:'Spot Autosalone Ferrari – 30s', duration:30 },
+  { name:'ZONA SUD',      deviceIdx:1, track:'Spot Pizzeria Da Mario – 20s',  duration:20 },
+  { name:'ZONA EST',      deviceIdx:2, track:'Spot Supermercato Iper – 30s',  duration:30 },
+  { name:'ZONA OVEST',    deviceIdx:3, track:'Spot Gioielleria Rossi – 45s',  duration:45 },
+  { name:'DAB+ CANALE A', deviceIdx:4, track:'Spot Assicurazioni Blu – 30s',  duration:30 },
+  { name:'DAB+ CANALE B', deviceIdx:5, track:'Spot Farmacia Centrale – 20s',  duration:20 },
+  { name:'WEB STREAM',    deviceIdx:6, track:'Spot E-commerce ModeItalia – 30s', duration:30 },
+  { name:'MONITOR STUDIO',deviceIdx:7, track:'Jingle Stazione – 10s',         duration:10 },
+];
+
+function initZones() {
+  DEFAULT_ZONES.forEach((def, i) => {
+    zones.push({
+      id: nextZoneId++,
+      name: def.name,
+      deviceId: audioDevices[def.deviceIdx]?.deviceId || '',
+      track: def.track,
+      fileUrl: null,
+      duration: def.duration,
+      progress: 0,
+      playing: false,
+      vol: 85,
+      audioEl: null,
+      sourceNode: null,
+      gainNode: null,
+      vuInterval: null,
+      progressInterval: null,
+    });
+  });
+}
+
+// ════════════════════════════════════════════════════════
+//  CLOCK
+// ════════════════════════════════════════════════════════
+function updateClock() {
+  const n = new Date();
+  document.getElementById('masterClock').textContent =
+    String(n.getHours()).padStart(2,'0') + ':' +
+    String(n.getMinutes()).padStart(2,'0') + ':' +
+    String(n.getSeconds()).padStart(2,'0');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ════════════════════════════════════════════════════════
+//  RENDER BREAKS
+// ════════════════════════════════════════════════════════
+function renderBreaks() {
+  const list = document.getElementById('breakList');
+  list.innerHTML = '';
+  breaks.forEach(b => {
+    const div = document.createElement('div');
+    const isActive = b.id === activeBreakId;
+    const isLive = isActive && breakLive;
+    div.className = 'break-item' + (isActive ? ' active' : '') + (isLive ? ' on-air' : '');
+    div.onclick = () => selectBreak(b.id);
+    div.innerHTML = `
+      <div class="break-time">${b.time}</div>
+      <div class="break-name">${b.name}</div>
+      <div class="break-duration">${b.duration} min · ${zones.length} zone</div>
+      ${isLive ? '<div class="break-badge live">LIVE</div>' : isActive ? '<div class="break-badge">ATTIVO</div>' : ''}`;
+    list.appendChild(div);
+  });
+}
+
+function selectBreak(id) {
+  if (breakLive) return;
+  activeBreakId = id;
+  const b = breaks.find(x => x.id === id);
+  document.getElementById('breakTitleInput').value = b.name;
+  renderBreaks();
+}
+
+// ════════════════════════════════════════════════════════
+//  RENDER ZONES
+// ════════════════════════════════════════════════════════
+function renderZones() {
+  const grid = document.getElementById('zonesGrid');
+  grid.innerHTML = '';
+  zones.forEach(z => renderZoneCard(z, grid));
+
+  // Add zone card
+  const add = document.createElement('div');
+  add.className = 'add-zone-card';
+  add.onclick = openAddZoneModal;
+  add.innerHTML = '<div class="add-zone-icon">＋</div><div class="add-zone-text">Aggiungi Zona</div>';
+  grid.appendChild(add);
+  updateZoneCount();
+}
+
+function renderZoneCard(z, container) {
+  const pct = (z.progress / z.duration * 100).toFixed(1);
+  const card = document.createElement('div');
+  card.id = 'zone-card-' + z.id;
+  const hasFile = !!z.fileUrl;
+  card.className = 'zone-card' + (z.playing ? ' on-air' : '') + (hasFile ? ' has-audio' : '');
+
+  let vuBars = '';
+  for (let i = 0; i < 24; i++) vuBars += `<div class="vu-bar" id="vubar-${z.id}-${i}"></div>`;
+
+  card.innerHTML = `
+    <div class="zone-header">
+      <div class="zone-name">${z.name}</div>
+      <div class="zone-status-badge ${z.playing ? 'live' : (hasFile ? 'loaded' : 'ready')}" id="zbadge-${z.id}">
+        ${z.playing ? '● LIVE' : hasFile ? '● PRONTO' : 'READY'}
+      </div>
+    </div>
+    <div class="zone-body">
+
+      <div class="device-row">
+        <div class="device-row-icon">🔊</div>
+        <select class="device-select" id="devsel-${z.id}" onchange="changeDevice(${z.id}, this.value)">
+          ${buildDeviceOptions(z.deviceId)}
+        </select>
+        <div class="device-indicator ${z.deviceId ? 'active' : ''}" id="devind-${z.id}"></div>
+      </div>
+
+      <label class="file-upload-area ${z.fileUrl ? 'has-file' : ''}" id="filearea-${z.id}" title="Clicca per caricare un file audio">
+        <span style="font-size:14px;">${z.fileUrl ? '🎵' : '📁'}</span>
+        <span class="file-upload-label" id="filelabel-${z.id}">${z.track}</span>
+        <input type="file" class="hidden-file" accept="audio/*" onchange="loadAudioFile(${z.id}, this)" />
+        ${z.fileUrl ? '' : '<span style="font-size:10px;color:var(--dim);white-space:nowrap;">Carica</span>'}
+      </label>
+
+      <div class="player-row">
+        <button class="play-btn ${z.playing ? 'playing' : ''}" id="playbtn-${z.id}" onclick="toggleZone(${z.id})">
+          ${z.playing ? '⏸' : '▶'}
+        </button>
+        <div class="track-info">
+          <div class="track-name">${z.track}</div>
+          <div class="track-meta">
+            <span id="tracktime-${z.id}">${formatTime(z.progress)} / ${formatTime(z.duration)}</span>
+            ${z.fileUrl ? '<span class="track-badge">AUDIO REALE</span>' : '<span style="font-size:9px;color:var(--dim);">tono test</span>'}
+          </div>
+        </div>
+        <button class="btn btn-outline" style="padding:3px 7px;font-size:11px;" onclick="stopZone(${z.id})">■</button>
+      </div>
+
+      <div class="progress-track" onclick="seekZone(${z.id}, event, this)">
+        <div class="progress-fill" id="progress-${z.id}" style="width:${pct}%"></div>
+      </div>
+      <div class="time-row">
+        <span id="elapsed-${z.id}">${formatTime(z.progress)}</span>
+        <span id="remaining-${z.id}">-${formatTime(z.duration - z.progress)}</span>
+      </div>
+
+      <div class="vu-meter" id="vumeter-${z.id}">${vuBars}</div>
+
+      <div class="vol-row">
+        <span class="vol-label">VOL</span>
+        <input type="range" class="vol-slider" min="0" max="100" value="${z.vol}" step="1"
+          oninput="updateZoneVol(${z.id}, this.value)">
+        <span class="vol-val" id="volval-${z.id}">${z.vol}%</span>
+      </div>
+    </div>
+    <div class="zone-footer">
+      <button class="btn btn-outline" onclick="renameZone(${z.id})">✎ RINOMINA</button>
+      <button class="btn btn-outline" onclick="testTone(${z.id})">♪ TEST</button>
+      <button class="btn btn-danger" onclick="removeZone(${z.id})">✕</button>
+    </div>`;
+
+  if (container) container.appendChild(card);
+}
+
+// ════════════════════════════════════════════════════════
+//  ZONE CONTROLS
+// ════════════════════════════════════════════════════════
+function toggleZone(id) {
+  const z = zones.find(x => x.id === id);
+  if (!z) return;
+  z.playing ? pauseZone(id) : startZone(id);
+}
+
+function startZone(id) {
+  const z = zones.find(x => x.id === id);
+  if (!z) return;
+
+  getAudioCtx(); // ensure context
+
+  // If real file loaded, use it
+  if (z.fileUrl) {
+    if (!z.audioEl) {
+      z.audioEl = new Audio(z.fileUrl);
+      z.audioEl.onended = () => { z.playing = false; stopVU(id); updateZoneUI(z); updateZoneCount(); };
+    } else {
+      z.audioEl.src = z.fileUrl;
+    }
+    attachAudio(z);
+    z.audioEl.play().catch(() => {});
+    // Sync progress to real audio time
+    clearInterval(z.progressInterval);
+    z.progressInterval = setInterval(() => {
+      if (!z.audioEl || !z.playing) return;
+      z.progress = z.audioEl.currentTime;
+      z.duration = z.audioEl.duration || z.duration;
+      updateZoneUI(z);
+    }, 300);
+  } else {
+    // Simulated progress + test tone
+    if (z.progress >= z.duration) z.progress = 0;
+    clearInterval(z.progressInterval);
+    z.progressInterval = setInterval(() => {
+      if (!z.playing) return;
+      z.progress += 0.3;
+      if (z.progress >= z.duration) {
+        z.progress = z.duration; z.playing = false;
+        clearInterval(z.progressInterval); stopVU(id); updateZoneUI(z); updateZoneCount();
+      } else {
+        updateZoneUI(z);
+      }
+    }, 300);
+  }
+
+  z.playing = true;
+  startVU(id);
+  updateZoneUI(z);
+  updateZoneCount();
+  refreshDevicesPanel();
+}
+
+function pauseZone(id) {
+  const z = zones.find(x => x.id === id);
+  if (!z) return;
+  z.playing = false;
+  if (z.audioEl) z.audioEl.pause();
+  clearInterval(z.progressInterval);
+  stopVU(id);
+  updateZoneUI(z);
+  updateZoneCount();
+}
+
+function stopZone(id) {
+  const z = zones.find(x => x.id === id);
+  if (!z) return;
+  z.playing = false;
+  z.progress = 0;
+  if (z.audioEl) { z.audioEl.pause(); z.audioEl.currentTime = 0; }
+  clearInterval(z.progressInterval);
+  stopVU(id);
+  updateZoneUI(z);
+  updateZoneCount();
+}
+
+function seekZone(id, event, trackEl) {
+  const z = zones.find(x => x.id === id);
+  if (!z) return;
+  const rect = trackEl.getBoundingClientRect();
+  const pct = (event.clientX - rect.left) / rect.width;
+  z.progress = pct * z.duration;
+  if (z.audioEl) z.audioEl.currentTime = z.progress;
+  updateZoneUI(z);
+}
+
+function changeDevice(id, deviceId) {
+  const z = zones.find(x => x.id === id);
+  if (!z) return;
+  z.deviceId = deviceId;
+  if (z.audioEl && z.audioEl.setSinkId) {
+    z.audioEl.setSinkId(deviceId || '').catch(() => {});
+  }
+  const ind = document.getElementById('devind-' + id);
+  if (ind) ind.className = 'device-indicator' + (deviceId ? ' active' : '');
+  refreshDevicesPanel();
+}
+
+function updateZoneVol(id, val) {
+  const z = zones.find(x => x.id === id);
+  if (!z) return;
+  z.vol = parseInt(val);
+  if (z.gainNode) z.gainNode.gain.value = z.vol / 100;
+  const el = document.getElementById('volval-' + id);
+  if (el) el.textContent = val + '%';
+}
+
+function loadAudioFile(id, input) {
+  const z = zones.find(x => x.id === id);
+  if (!z || !input.files[0]) return;
+  const file = input.files[0];
+  if (z.fileUrl) URL.revokeObjectURL(z.fileUrl);
+  z.fileUrl = URL.createObjectURL(file);
+  z.track = file.name.replace(/\.[^.]+$/, '');
+  // Reset audio element so it picks up new src
+  if (z.audioEl) { z.audioEl.pause(); z.sourceNode = null; z.gainNode = null; z.audioEl = null; }
+  z.progress = 0;
+  // Update UI
+  const area = document.getElementById('filearea-' + id);
+  const lbl = document.getElementById('filelabel-' + id);
+  const card = document.getElementById('zone-card-' + id);
+  if (area) area.className = 'file-upload-area has-file';
+  if (lbl) lbl.textContent = z.track;
+  if (card) card.classList.add('has-audio');
+  const tname = card?.querySelector('.track-name');
+  if (tname) tname.textContent = z.track;
+  const tmeta = card?.querySelector('.track-meta');
+  if (tmeta) tmeta.innerHTML = `<span id="tracktime-${id}">${formatTime(0)} / ?</span><span class="track-badge">AUDIO REALE</span>`;
+  const badge = document.getElementById('zbadge-' + id);
+  if (badge) { badge.className = 'zone-status-badge loaded'; badge.textContent = '● PRONTO'; }
+}
+
+function updateZoneUI(z) {
+  const pct = Math.min(100, (z.progress / z.duration * 100)).toFixed(1);
+  const pEl = document.getElementById('progress-' + z.id);
+  if (pEl) pEl.style.width = pct + '%';
+  const el = document.getElementById('elapsed-' + z.id);
+  const re = document.getElementById('remaining-' + z.id);
+  const tt = document.getElementById('tracktime-' + z.id);
+  if (el) el.textContent = formatTime(z.progress);
+  if (re) re.textContent = '-' + formatTime(Math.max(0, z.duration - z.progress));
+  if (tt) tt.textContent = formatTime(z.progress) + ' / ' + formatTime(z.duration);
+  const btn = document.getElementById('playbtn-' + z.id);
+  if (btn) { btn.innerHTML = z.playing ? '⏸' : '▶'; btn.className = 'play-btn' + (z.playing ? ' playing' : ''); }
+  const card = document.getElementById('zone-card-' + z.id);
+  if (card) {
+    card.className = 'zone-card' + (z.playing ? ' on-air' : '') + (z.fileUrl ? ' has-audio' : '');
+    const badge = document.getElementById('zbadge-' + z.id);
+    if (badge) {
+      badge.className = 'zone-status-badge ' + (z.playing ? 'live' : z.fileUrl ? 'loaded' : 'ready');
+      badge.textContent = z.playing ? '● LIVE' : z.fileUrl ? '● PRONTO' : 'READY';
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  VU METERS
+// ════════════════════════════════════════════════════════
+function startVU(id) {
+  clearInterval(zones.find(z => z.id === id)?.vuInterval);
+  const z = zones.find(x => x.id === id);
+  if (!z) return;
+  z.vuInterval = setInterval(() => {
+    const meter = document.getElementById('vumeter-' + id);
+    if (!meter) return;
+    const lvl = Math.random() * 0.7 + 0.3;
+    meter.querySelectorAll('.vu-bar').forEach((bar, i) => {
+      const th = i / 24;
+      bar.className = 'vu-bar';
+      if (th < lvl) {
+        if (i >= 20) bar.classList.add('c');
+        else if (i >= 15) bar.classList.add('b');
+        else bar.classList.add('a');
+        bar.style.height = (35 + Math.random() * 65) + '%';
+      } else {
+        bar.style.height = '8%';
+      }
+    });
+  }, 90);
+}
+
+function stopVU(id) {
+  const z = zones.find(x => x.id === id);
+  if (z) clearInterval(z.vuInterval);
+  const meter = document.getElementById('vumeter-' + id);
+  if (!meter) return;
+  meter.querySelectorAll('.vu-bar').forEach(b => { b.className = 'vu-bar'; b.style.height = '8%'; });
+}
+
+// ════════════════════════════════════════════════════════
+//  ZONE MANAGEMENT
+// ════════════════════════════════════════════════════════
+function removeZone(id) {
+  stopZone(id);
+  zones = zones.filter(z => z.id !== id);
+  renderZones();
+  renderBreaks();
+  refreshDevicesPanel();
+}
+
+function renameZone(id) {
+  const z = zones.find(x => x.id === id);
+  if (!z) return;
+  const n = prompt('Nuovo nome zona:', z.name);
+  if (n) { z.name = n.toUpperCase(); renderZones(); }
+}
+
+function testTone(id) {
+  const z = zones.find(x => x.id === id);
+  if (!z) return;
+  if (z.playing) stopZone(id);
+  const url = generateTestTone(id);
+  if (typeof url === 'object' && url.then) {
+    url.then(u => { z.fileUrl = u; startZone(id); setTimeout(() => stopZone(id), 5000); });
+  } else {
+    z.fileUrl = url; startZone(id); setTimeout(() => stopZone(id), 5000);
+  }
+}
+
+function updateZoneCount() {
+  const active = zones.filter(z => z.playing).length;
+  document.getElementById('activeZoneCount').textContent = active + ' / ' + zones.length;
+  document.getElementById('activeZonesLabel').textContent = active + ' ZONE IN ARIA';
+}
+
+function refreshDevicesPanel() {
+  renderDevicesPanel();
+}
+
+// ════════════════════════════════════════════════════════
+//  BREAK LIVE
+// ════════════════════════════════════════════════════════
+function toggleBreakLive() {
+  breakLive ? stopBreakLive() : startBreakLive();
+}
+
+function startBreakLive() {
+  const b = breaks.find(x => x.id === activeBreakId);
+  if (!b) return;
+  getAudioCtx();
+  breakLive = true;
+  breakCountdown = b.duration * 60;
+  document.getElementById('liveBreakBtn').textContent = '■ STOP BREAK';
+  document.getElementById('liveBreakBtn').classList.add('active-live');
+  document.getElementById('onairBanner').classList.add('visible');
+  document.getElementById('breakStatus').textContent = '● ' + b.name.toUpperCase() + ' — IN ONDA';
+  zones.forEach(z => startZone(z.id));
+  renderBreaks();
+  clearInterval(countTimer);
+  countTimer = setInterval(() => {
+    if (!breakLive) { clearInterval(countTimer); return; }
+    breakCountdown--;
+    const el = document.getElementById('countdownDisplay');
+    el.textContent = formatTime(breakCountdown);
+    el.className = 'countdown-display' + (breakCountdown <= 10 ? ' urgent' : '');
+    if (breakCountdown <= 0) stopBreakLive();
+  }, 1000);
+}
+
+function stopBreakLive() {
+  breakLive = false;
+  clearInterval(countTimer);
+  zones.forEach(z => stopZone(z.id));
+  document.getElementById('liveBreakBtn').textContent = '▶ AVVIA BREAK';
+  document.getElementById('liveBreakBtn').classList.remove('active-live');
+  document.getElementById('onairBanner').classList.remove('visible');
+  document.getElementById('countdownDisplay').textContent = '--:--';
+  document.getElementById('countdownDisplay').className = 'countdown-display';
+  document.getElementById('breakStatus').textContent = 'BREAK TERMINATO';
+  renderBreaks();
+  updateZoneCount();
+}
+
+function toggleMasterLive() {
+  masterLive = !masterLive;
+  const btn = document.getElementById('masterLiveBtn');
+  if (masterLive) {
+    getAudioCtx();
+    btn.textContent = '■ OFF AIR'; btn.classList.add('active-live');
+  } else {
+    btn.textContent = '▶ ON AIR'; btn.classList.remove('active-live');
+    if (breakLive) stopBreakLive();
+  }
+}
+
+function syncAllZones() {
+  getAudioCtx();
+  zones.forEach(z => { z.progress = 0; if (z.audioEl) z.audioEl.currentTime = 0; updateZoneUI(z); });
+  setTimeout(() => zones.forEach(z => startZone(z.id)), 80);
+}
+
+function resetAllZones() {
+  zones.forEach(z => stopZone(z.id));
+  updateZoneCount();
+}
+
+function updateMasterVol(val) {
+  document.getElementById('masterVolVal').textContent = val + '%';
+  if (masterGain) masterGain.gain.value = val / 100;
+}
+
+// ════════════════════════════════════════════════════════
+//  MODALS
+// ════════════════════════════════════════════════════════
+function openAddBreakModal() { document.getElementById('addBreakModal').classList.add('open'); }
+function openAddZoneModal() {
+  document.getElementById('newZoneDevice').innerHTML = buildDeviceOptions('');
+  document.getElementById('addZoneModal').classList.add('open');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function addBreak() {
+  const name = document.getElementById('newBreakName').value.trim() || 'Nuovo Break';
+  const time = document.getElementById('newBreakTime').value;
+  const dur = parseInt(document.getElementById('newBreakDuration').value) || 3;
+  breaks.push({ id: nextBreakId++, name, time, duration: dur });
+  breaks.sort((a, b) => a.time.localeCompare(b.time));
+  closeModal('addBreakModal');
+  document.getElementById('newBreakName').value = '';
+  renderBreaks();
+}
+
+function addZoneFromModal() {
+  const name = (document.getElementById('newZoneName').value.trim() || 'NUOVA ZONA').toUpperCase();
+  const deviceId = document.getElementById('newZoneDevice').value;
+  const track = document.getElementById('newZoneTrack').value.trim() || 'Traccia non definita';
+  const duration = parseInt(document.getElementById('newZoneDuration').value) || 30;
+  zones.push({ id: nextZoneId++, name, deviceId, track, fileUrl:null, duration, progress:0, playing:false, vol:85, audioEl:null, sourceNode:null, gainNode:null, vuInterval:null, progressInterval:null });
+  closeModal('addZoneModal');
+  document.getElementById('newZoneName').value = '';
+  document.getElementById('newZoneTrack').value = '';
+  renderZones();
+  renderBreaks();
+  refreshDevicesPanel();
+}
+
+function updateActiveBreakTitle(val) {
+  const b = breaks.find(x => x.id === activeBreakId);
+  if (b) { b.name = val; renderBreaks(); }
+}
+
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+function formatTime(sec) {
+  const s = Math.max(0, Math.floor(sec));
+  return String(Math.floor(s / 60)).padStart(2,'0') + ':' + String(s % 60).padStart(2,'0');
+}
+
+
+// ════════════════════════════════════════════════════════
+//  SETTINGS
+// ════════════════════════════════════════════════════════
+const TEMPLATES = [
+  { name:'Palinsesto Standard', desc:'Break ogni ora dalle 6 alle 24', count:18,
+    breaks: Array.from({length:18}, (_,i) => ({ time: String(6+i).padStart(2,'0')+':00', duration:3, name:'Break Ore '+ String(6+i).padStart(2,'0')+':00' })) },
+  { name:'Mattina Intensiva', desc:'Break ogni 30 min 6:00–12:00', count:12,
+    breaks: Array.from({length:12}, (_,i) => { const h=Math.floor(i/2)+6; const m=i%2===0?'00':'30'; return { time:String(h).padStart(2,'0')+':'+m, duration:2, name:'Break '+String(h).padStart(2,'0')+':'+m }; }) },
+  { name:'Prime Time', desc:'Break ogni 20 min 18:00–22:00', count:12,
+    breaks: Array.from({length:12}, (_,i) => { const tot=1080+i*20; const h=Math.floor(tot/60); const m=tot%60; return { time:String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'), duration:4, name:'Break '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0') }; }) },
+  { name:'Notturno', desc:'Break ogni 2 ore 22:00–6:00', count:4,
+    breaks: [{time:'22:00',duration:2,name:'Break 22:00'},{time:'00:00',duration:2,name:'Break 00:00'},{time:'02:00',duration:2,name:'Break 02:00'},{time:'04:00',duration:2,name:'Break 04:00'}] },
+  { name:'Weekend', desc:'Break ogni 90 min 8:00–24:00', count:11,
+    breaks: Array.from({length:11}, (_,i) => { const tot=480+i*90; const h=Math.floor(tot/60); const m=tot%60; return { time:String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'), duration:4, name:'Break '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0') }; }) },
+  { name:'Notizie Orarie', desc:'Break 5 min prima di ogni ora 7:00–20:00', count:13,
+    breaks: Array.from({length:13}, (_,i) => ({ time:String(7+i).padStart(2,'0')+':55', duration:5, name:'GR Ore '+String(8+i).padStart(2,'0')+':00' })) },
+];
+
+let userTemplates = JSON.parse(localStorage.getItem('rz_templates') || '[]');
+
+function openSettings() {
+  document.getElementById('settingsOverlay').classList.add('open');
+  renderBreaksTable();
+  renderTemplatesGrid();
+  renderCfgDevices();
+  updateBatchPreview();
+}
+
+function closeSettings() {
+  document.getElementById('settingsOverlay').classList.remove('open');
+  renderBreaks(); // refresh sidebar
+}
+
+function saveSettings() {
+  // persist templates
+  localStorage.setItem('rz_templates', JSON.stringify(userTemplates));
+  // flash save status
+  const el = document.getElementById('cfgSaveStatus');
+  el.style.opacity = '1';
+  setTimeout(() => { el.style.opacity = '0'; }, 1800);
+  closeSettings();
+}
+
+function switchTab(el) {
+  document.querySelectorAll('.stab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.settings-pane').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(el.dataset.pane).classList.add('active');
+}
+
+// ── BREAKS TABLE ──
+function renderBreaksTable() {
+  const tbody = document.getElementById('breaksTableBody');
+  tbody.innerHTML = '';
+  breaks.forEach(b => {
+    const tr = document.createElement('tr');
+    tr.className = 'break-row' + (b.id === activeBreakId ? ' active-row' : '');
+    tr.id = 'btr-' + b.id;
+    tr.innerHTML = `
+      <td class="td-handle" title="Trascina per riordinare">⠿</td>
+      <td class="td-time"><input type="time" value="${b.time}" onchange="updateBreakField(${b.id},'time',this.value)" /></td>
+      <td class="td-name"><input type="text" value="${b.name}" onchange="updateBreakField(${b.id},'name',this.value)" /></td>
+      <td class="td-dur"><input type="number" value="${b.duration}" min="1" max="60" onchange="updateBreakField(${b.id},'duration',parseInt(this.value)||1)" /></td>
+      <td style="padding:6px 10px;border-left:1px solid var(--border);">
+        <div style="display:flex;gap:5px;">
+          <button class="tbl-btn dup" onclick="duplicateBreak(${b.id})" title="Duplica">⎘</button>
+          <button class="tbl-btn" onclick="selectBreakFromCfg(${b.id})" title="Seleziona come attivo" style="${b.id===activeBreakId?'color:var(--accent);border-color:var(--accent)':''}">★</button>
+          <button class="tbl-btn del" onclick="deleteBreakFromCfg(${b.id})" title="Elimina">✕</button>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateBreakField(id, field, value) {
+  const b = breaks.find(x => x.id === id);
+  if (b) { b[field] = value; }
+}
+
+function duplicateBreak(id) {
+  const b = breaks.find(x => x.id === id);
+  if (!b) return;
+  breaks.push({ id: nextBreakId++, name: b.name + ' (copia)', time: b.time, duration: b.duration });
+  breaks.sort((a,b) => a.time.localeCompare(b.time));
+  renderBreaksTable();
+}
+
+function deleteBreakFromCfg(id) {
+  if (breaks.length <= 1) return;
+  breaks = breaks.filter(x => x.id !== id);
+  if (!breaks.find(x => x.id === activeBreakId)) activeBreakId = breaks[0].id;
+  renderBreaksTable();
+}
+
+function selectBreakFromCfg(id) {
+  activeBreakId = id;
+  const b = breaks.find(x => x.id === id);
+  document.getElementById('breakTitleInput').value = b.name;
+  renderBreaksTable();
+}
+
+function quickAddBreak() {
+  const name = document.getElementById('qbName').value.trim() || ('Break Ore ' + document.getElementById('qbTime').value);
+  const time = document.getElementById('qbTime').value;
+  const dur = parseInt(document.getElementById('qbDur').value) || 3;
+  breaks.push({ id: nextBreakId++, name, time, duration: dur });
+  breaks.sort((a,b) => a.time.localeCompare(b.time));
+  document.getElementById('qbName').value = '';
+  // Auto-advance time by 1h
+  const [hh, mm] = time.split(':').map(Number);
+  const next = new Date(0, 0, 0, hh + 1, mm);
+  document.getElementById('qbTime').value = String(next.getHours()).padStart(2,'0') + ':' + String(next.getMinutes()).padStart(2,'0');
+  renderBreaksTable();
+}
+
+function sortBreaksByTime() {
+  breaks.sort((a,b) => a.time.localeCompare(b.time));
+  renderBreaksTable();
+}
+
+function clearAllBreaks() {
+  if (!confirm('Eliminare tutti i break dalla scaletta?')) return;
+  breaks = [{ id: nextBreakId++, name: 'Break Nuovo', time: '09:00', duration: 3 }];
+  activeBreakId = breaks[0].id;
+  renderBreaksTable();
+}
+
+// ── BATCH GENERATOR ──
+function calcBatchBreaks() {
+  const prefix = document.getElementById('batchPrefix').value || 'Break';
+  const dur = parseInt(document.getElementById('batchDur').value) || 3;
+  const interval = parseInt(document.getElementById('batchInterval').value) || 60;
+  const startVal = document.getElementById('batchStart').value || '06:00';
+  const endVal = document.getElementById('batchEnd').value || '24:00';
+  const [sh, sm] = startVal.split(':').map(Number);
+  let [eh, em] = endVal.split(':').map(Number);
+  if (eh === 0 && em === 0) { eh = 24; em = 0; }
+  let cur = sh * 60 + sm;
+  const end = eh * 60 + em;
+  const result = [];
+  while (cur <= end) {
+    const h = Math.floor(cur / 60) % 24;
+    const m = cur % 60;
+    const timeStr = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+    result.push({ id: 0, name: prefix + ' Ore ' + timeStr, time: timeStr, duration: dur });
+    cur += interval;
+  }
+  return result;
+}
+
+function updateBatchPreview() {
+  const list = calcBatchBreaks();
+  const prev = document.getElementById('batchPreview');
+  if (!list.length) { prev.innerHTML = 'Nessun break in questo intervallo'; return; }
+  prev.innerHTML = '<strong style="color:var(--text)">' + list.length + ' break:</strong>&nbsp;&nbsp;' +
+    list.map(b => `<span>${b.time}</span>`).join('');
+}
+
+function generateBatch(replace) {
+  const list = calcBatchBreaks();
+  if (!list.length) return;
+  if (replace) breaks = [];
+  list.forEach(b => breaks.push({ id: nextBreakId++, name: b.name, time: b.time, duration: b.duration }));
+  breaks.sort((a,b) => a.time.localeCompare(b.time));
+  if (!breaks.find(x => x.id === activeBreakId)) activeBreakId = breaks[0].id;
+  renderBreaksTable();
+  // flash success
+  const btn = event.target;
+  const orig = btn.textContent;
+  btn.textContent = '✓ ' + list.length + ' break aggiunti!';
+  btn.style.background = 'rgba(0,255,136,.2)';
+  setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2000);
+}
+
+function importPasteBreaks() {
+  const raw = document.getElementById('pasteBreaks').value.trim();
+  const dur = parseInt(document.getElementById('pasteDur').value) || 3;
+  const prefix = document.getElementById('pastePrefix').value || 'Break';
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => /^\d{1,2}:\d{2}$/.test(l));
+  if (!lines.length) { alert('Nessun orario valido trovato. Formato: HH:MM'); return; }
+  lines.forEach(time => breaks.push({ id: nextBreakId++, name: prefix + ' Ore ' + time, time, duration: dur }));
+  breaks.sort((a,b) => a.time.localeCompare(b.time));
+  document.getElementById('pasteBreaks').value = '';
+  renderBreaksTable();
+}
+
+// ── TEMPLATES ──
+function renderTemplatesGrid() {
+  const grid = document.getElementById('templatesGrid');
+  grid.innerHTML = '';
+  TEMPLATES.forEach((t, i) => {
+    const card = document.createElement('div');
+    card.className = 'template-card';
+    card.innerHTML = `<div class="template-card-name">${t.name}</div>
+      <div class="template-card-desc">${t.desc}</div>
+      <div class="template-card-count">${t.count} break</div>`;
+    card.onclick = () => applyTemplate(i);
+    grid.appendChild(card);
+  });
+
+  const ugrid = document.getElementById('userTemplatesGrid');
+  ugrid.innerHTML = '';
+  if (userTemplates.length === 0) {
+    ugrid.innerHTML = '<div style="font-size:12px;color:var(--dim);grid-column:1/-1">Nessun template salvato. Crea la tua scaletta e salvala come template.</div>';
+    return;
+  }
+  userTemplates.forEach((t, i) => {
+    const card = document.createElement('div');
+    card.className = 'template-card';
+    card.innerHTML = `<div class="template-card-name">${t.name}</div>
+      <div class="template-card-desc">Salvato il ${t.saved||''}</div>
+      <div class="template-card-count">${t.breaks.length} break</div>
+      <div style="margin-top:8px;display:flex;gap:6px;">
+        <button class="tbl-btn" onclick="event.stopPropagation();applyUserTemplate(${i})">Carica</button>
+        <button class="tbl-btn del" onclick="event.stopPropagation();deleteUserTemplate(${i})">✕</button>
+      </div>`;
+    ugrid.appendChild(card);
+  });
+}
+
+function applyTemplate(idx) {
+  if (!confirm('Sostituire la scaletta corrente con il template "' + TEMPLATES[idx].name + '"?')) return;
+  breaks = TEMPLATES[idx].breaks.map(b => ({ id: nextBreakId++, name: b.name, time: b.time, duration: b.duration }));
+  activeBreakId = breaks[0].id;
+  document.getElementById('breakTitleInput').value = breaks[0].name;
+  renderBreaksTable();
+}
+
+function applyUserTemplate(idx) {
+  if (!confirm('Sostituire la scaletta corrente con "' + userTemplates[idx].name + '"?')) return;
+  breaks = userTemplates[idx].breaks.map(b => ({ id: nextBreakId++, name: b.name, time: b.time, duration: b.duration }));
+  activeBreakId = breaks[0].id;
+  renderBreaksTable();
+}
+
+function deleteUserTemplate(idx) {
+  if (!confirm('Eliminare il template "' + userTemplates[idx].name + '"?')) return;
+  userTemplates.splice(idx, 1);
+  localStorage.setItem('rz_templates', JSON.stringify(userTemplates));
+  renderTemplatesGrid();
+}
+
+function saveAsTemplate() {
+  const name = document.getElementById('saveTemplateName').value.trim();
+  if (!name) { alert('Inserisci un nome per il template'); return; }
+  const d = new Date();
+  const saved = d.getDate() + '/' + (d.getMonth()+1) + '/' + d.getFullYear();
+  userTemplates.push({ name, saved, breaks: breaks.map(b => ({ name:b.name, time:b.time, duration:b.duration })) });
+  localStorage.setItem('rz_templates', JSON.stringify(userTemplates));
+  document.getElementById('saveTemplateName').value = '';
+  renderTemplatesGrid();
+}
+
+// ── DEVICES CFG ──
+function renderCfgDevices() {
+  const el = document.getElementById('cfgDevicesList');
+  if (!el) return;
+  if (audioDevices.length === 0) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--dim);padding:10px;">Nessuna scheda audio rilevata. Clicca "Rileggi dispositivi".</div>';
+    return;
+  }
+  el.innerHTML = audioDevices.map((d,i) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--panel);border:1px solid var(--border);border-radius:6px;margin-bottom:7px;">
+      <div style="font-size:18px;">🔊</div>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text);">${d.label}</div>
+        <div style="font-size:10px;color:var(--dim);font-family:monospace;">${d.deviceId}</div>
+      </div>
+      <div style="margin-left:auto;font-size:11px;color:var(--accent);">Output ${i+1}</div>
+    </div>`).join('');
+}
+
+// ── GENERAL ──
+function updateStationName(val) {
+  const logo = document.querySelector('.logo');
+  if (logo) logo.innerHTML = (val || 'RADIOZONE').replace(/(.+)(\s\S+$)/, (_, a, b) => a + '<span>' + b + '</span>');
+}
+
+function exportBreaks() {
+  const data = JSON.stringify(breaks.map(b => ({ name:b.name, time:b.time, duration:b.duration })), null, 2);
+  const blob = new Blob([data], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'scaletta-break.json';
+  a.click();
+}
+
+function importBreaks(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data)) throw new Error('Formato non valido');
+      breaks = data.map(b => ({ id: nextBreakId++, name: b.name||'Break', time: b.time||'09:00', duration: parseInt(b.duration)||3 }));
+      breaks.sort((a,b) => a.time.localeCompare(b.time));
+      activeBreakId = breaks[0].id;
+      renderBreaksTable();
+      alert('Importati ' + breaks.length + ' break');
+    } catch(err) {
+      alert('Errore importazione: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════
+async function init() {
+  await scanDevices();
+  initZones();
+  renderBreaks();
+  renderZones();
+}
+
+init();
+</script>
+
+<!-- ══════════════════════════════════════════════════
+     SETTINGS OVERLAY
+════════════════════════════════════════════════════ -->
+<div class="settings-overlay" id="settingsOverlay">
+
+  <div class="settings-header">
+    <div class="settings-title">⚙ CONFIGURAZIONE</div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <span id="cfgSaveStatus" style="font-size:11px;color:var(--green);opacity:0;transition:opacity .5s;letter-spacing:1px;">✓ SALVATO</span>
+      <button class="btn btn-accent" onclick="saveSettings()">✓ SALVA E CHIUDI</button>
+      <button class="btn btn-outline" onclick="closeSettings()">✕ CHIUDI</button>
+    </div>
+  </div>
+
+  <div class="settings-tabs">
+    <div class="stab active" data-pane="pane-breaks" onclick="switchTab(this)">Scalette Break</div>
+    <div class="stab" data-pane="pane-quickadd" onclick="switchTab(this)">Creazione Rapida</div>
+    <div class="stab" data-pane="pane-templates" onclick="switchTab(this)">Template</div>
+    <div class="stab" data-pane="pane-devices" onclick="switchTab(this)">Schede Audio</div>
+    <div class="stab" data-pane="pane-general" onclick="switchTab(this)">Generali</div>
+  </div>
+
+  <div class="settings-body">
+
+    <!-- ── PANE: SCALETTE BREAK ── -->
+    <div class="settings-pane active" id="pane-breaks">
+      <div class="breaks-toolbar">
+        <span class="breaks-toolbar-label">AGGIUNGI</span>
+        <input class="cfg-input" type="text" id="qbName" placeholder="Nome break (es. Break Ore 09:00)" style="min-width:220px;" />
+        <input class="cfg-input" type="time" id="qbTime" value="09:00" />
+        <input class="cfg-input" type="number" id="qbDur" value="3" min="1" max="60" title="Durata minuti" />
+        <span style="font-size:11px;color:var(--dim)">min</span>
+        <button class="btn btn-accent" onclick="quickAddBreak()">+ AGGIUNGI</button>
+        <div style="margin-left:auto;display:flex;gap:8px;">
+          <button class="btn btn-outline" onclick="sortBreaksByTime()">⇅ Ordina per orario</button>
+          <button class="btn btn-outline" onclick="clearAllBreaks()" style="border-color:rgba(255,51,85,.4);color:rgba(255,51,85,.7);">✕ Svuota tutto</button>
+        </div>
+      </div>
+
+      <table class="breaks-table" id="breaksTable">
+        <thead>
+          <tr>
+            <th style="width:28px;"></th>
+            <th>Orario</th>
+            <th>Nome Break</th>
+            <th style="width:80px;">Durata</th>
+            <th style="width:110px;">Azioni</th>
+          </tr>
+        </thead>
+        <tbody id="breaksTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- ── PANE: CREAZIONE RAPIDA ── -->
+    <div class="settings-pane" id="pane-quickadd">
+      <div class="cfg-section">
+        <div class="cfg-section-title">Generatore Break Multipli</div>
+        <div class="quick-add-section">
+          <div class="quick-add-title">CREA SERIE DI BREAK AUTOMATICAMENTE</div>
+          <div class="quick-row">
+            <div class="quick-field">
+              <label>Orario primo break</label>
+              <input class="cfg-input" type="time" id="batchStart" value="06:00" oninput="updateBatchPreview()" />
+            </div>
+            <div class="quick-field">
+              <label>Orario ultimo break</label>
+              <input class="cfg-input" type="time" id="batchEnd" value="24:00" oninput="updateBatchPreview()" />
+            </div>
+            <div class="quick-field">
+              <label>Ogni (minuti)</label>
+              <input class="cfg-input" type="number" id="batchInterval" value="60" min="5" max="480" oninput="updateBatchPreview()" style="width:80px;" />
+            </div>
+            <div class="quick-field">
+              <label>Durata (min)</label>
+              <input class="cfg-input" type="number" id="batchDur" value="3" min="1" max="30" oninput="updateBatchPreview()" style="width:70px;" />
+            </div>
+            <div class="quick-field">
+              <label>Prefisso nome</label>
+              <input class="cfg-input" type="text" id="batchPrefix" value="Break" oninput="updateBatchPreview()" style="width:120px;" />
+            </div>
+          </div>
+          <div class="batch-preview" id="batchPreview">Anteprima break…</div>
+          <div style="margin-top:12px;display:flex;gap:10px;">
+            <button class="btn btn-accent" onclick="generateBatch(false)">+ AGGIUNGI ALLA SCALETTA</button>
+            <button class="btn btn-outline" onclick="generateBatch(true)">↺ SOSTITUISCI SCALETTA</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="cfg-section">
+        <div class="cfg-section-title">Aggiunta Rapida Multipla</div>
+        <div class="quick-add-section">
+          <div class="quick-add-title">INCOLLA LISTA ORARI (uno per riga)</div>
+          <textarea class="cfg-input" id="pasteBreaks" rows="6" placeholder="06:00&#10;07:30&#10;09:00&#10;10:30&#10;12:00&#10;..." style="width:100%;resize:vertical;font-family:monospace;"></textarea>
+          <div class="quick-row" style="margin-top:10px;">
+            <div class="quick-field">
+              <label>Durata default (min)</label>
+              <input class="cfg-input" type="number" id="pasteDur" value="3" min="1" max="30" style="width:70px;" />
+            </div>
+            <div class="quick-field">
+              <label>Prefisso nome</label>
+              <input class="cfg-input" type="text" id="pastePrefix" value="Break" style="width:120px;" />
+            </div>
+            <button class="btn btn-accent" style="align-self:flex-end;" onclick="importPasteBreaks()">IMPORTA</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PANE: TEMPLATE ── -->
+    <div class="settings-pane" id="pane-templates">
+      <div class="cfg-section">
+        <div class="cfg-section-title">Template Predefiniti</div>
+        <div class="templates-grid" id="templatesGrid"></div>
+      </div>
+      <div class="cfg-section">
+        <div class="cfg-section-title">Salva Scaletta Corrente come Template</div>
+        <div class="quick-row">
+          <div class="quick-field">
+            <label>Nome template</label>
+            <input class="cfg-input" type="text" id="saveTemplateName" placeholder="es. Palinsesto Weekend" style="min-width:220px;" />
+          </div>
+          <button class="btn btn-accent" onclick="saveAsTemplate()">SALVA TEMPLATE</button>
+        </div>
+        <div class="cfg-section-title" style="margin-top:20px;">Template Salvati</div>
+        <div class="templates-grid" id="userTemplatesGrid"></div>
+      </div>
+    </div>
+
+    <!-- ── PANE: SCHEDE AUDIO ── -->
+    <div class="settings-pane" id="pane-devices">
+      <div class="cfg-section">
+        <div class="cfg-section-title">Dispositivi Audio Rilevati</div>
+        <div id="cfgDevicesList" style="margin-bottom:16px;"></div>
+        <button class="btn btn-accent" onclick="scanDevices(); renderCfgDevices();">↺ Rileggi dispositivi</button>
+      </div>
+      <div class="cfg-section">
+        <div class="cfg-section-title">Diagnostica</div>
+        <div id="cfgDeviceLog" style="font-family:monospace;font-size:11px;line-height:1.8;padding:10px;background:var(--panel);border-radius:6px;border:1px solid var(--border);max-height:300px;overflow-y:auto;color:var(--dim);">
+          Clicca "Rileggi dispositivi" per avviare la diagnostica.
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PANE: GENERALI ── -->
+    <div class="settings-pane" id="pane-general">
+      <div class="cfg-section">
+        <div class="cfg-section-title">Nome Emittente</div>
+        <div class="cfg-row">
+          <label>Nome stazione</label>
+          <input class="cfg-input" type="text" id="cfgStationName" value="RADIO ZONE" style="min-width:220px;" oninput="updateStationName(this.value)" />
+        </div>
+      </div>
+      <div class="cfg-section">
+        <div class="cfg-section-title">Countdown Avviso</div>
+        <div class="cfg-row">
+          <label>Allerta finale (secondi)</label>
+          <input class="cfg-input" type="number" id="cfgAlertSec" value="10" min="3" max="60" style="width:80px;" />
+        </div>
+      </div>
+      <div class="cfg-section">
+        <div class="cfg-section-title">Importa / Esporta Scaletta</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-outline" onclick="exportBreaks()">↓ Esporta JSON</button>
+          <label class="btn btn-outline" style="cursor:pointer;">
+            ↑ Importa JSON
+            <input type="file" accept=".json" style="display:none;" onchange="importBreaks(this)" />
+          </label>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
